@@ -1,0 +1,791 @@
+{
+  "name": "PRIMA - Automatisation Prospection Sophie",
+  "nodes": [
+    {
+      "id": "schedule_trigger",
+      "name": "Vérification 2x/jour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8,
+              "triggerAtMinute": 30
+            },
+            {
+              "triggerAtHour": 14,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zoominfo_auth",
+      "name": "ZoomInfo - Authentification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.zoominfo.com/auth/token",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{$credentials.zoomInfoClientId}}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{$credentials.zoomInfoClientSecret}}"
+            },
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zoominfo_website_visits",
+      "name": "ZoomInfo - Visites Site Web",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.zoominfo.com/websitevisitor/v2/visitors",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$node[\"zoominfo_auth\"].json[\"access_token\"]}}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startDate",
+              "value": "={{$today.minus({days: 1}).toISO()}}"
+            },
+            {
+              "name": "endDate",
+              "value": "={{$today.toISO()}}"
+            },
+            {
+              "name": "pageSize",
+              "value": "100"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "filter_criteria",
+      "name": "Filtrer Critères Sophie",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.companySize}}",
+              "operation": "larger",
+              "value2": 10
+            },
+            {
+              "value1": "={{$json.pageViews}}",
+              "operation": "larger",
+              "value2": 2
+            },
+            {
+              "value1": "={{$json.companyType}}",
+              "operation": "notContains",
+              "value2": "Government"
+            },
+            {
+              "value1": "={{$json.companyType}}",
+              "operation": "notContains",
+              "value2": "University"
+            }
+          ]
+        },
+        "combineConditions": "all"
+      }
+    },
+    {
+      "id": "check_existing_membrain",
+      "name": "Vérifier Doublons Membrain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.membrain.com/v1/companies",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$credentials.membrainApiKey}}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{$json.companyWebsite}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "if_existing",
+      "name": "Entreprise Existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.results.length}}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "language_split",
+      "name": "Split FR/EN",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1450, 200],
+      "parameters": {
+        "dataPropertyName": "={{$json.location}}",
+        "rules": {
+          "rules": [
+            {
+              "operation": "contains",
+              "value": "Quebec",
+              "output": 0
+            },
+            {
+              "operation": "contains",
+              "value": "Montreal",
+              "output": 0
+            },
+            {
+              "operation": "contains",
+              "value": "Ontario",
+              "output": 1
+            },
+            {
+              "operation": "contains",
+              "value": "Toronto",
+              "output": 1
+            }
+          ]
+        },
+        "fallbackOutput": 1
+      }
+    },
+    {
+      "id": "enrich_zoominfo_contacts",
+      "name": "Enrichir Contacts ZoomInfo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1650, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.zoominfo.com/search/contact",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$node[\"zoominfo_auth\"].json[\"access_token\"]}}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "companyId",
+              "value": "={{$json.companyId}}"
+            },
+            {
+              "name": "jobTitle",
+              "value": "CIO OR CEO OR VP Sales"
+            },
+            {
+              "name": "pageSize",
+              "value": "10"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "transform_company_data",
+      "name": "Transformer Données Entreprise",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1850, 300],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "company.name",
+              "value": "={{$json.companyName}}"
+            },
+            {
+              "name": "company.website",
+              "value": "={{$json.companyWebsite}}"
+            },
+            {
+              "name": "company.size",
+              "value": "={{$json.employeeCount}}"
+            },
+            {
+              "name": "company.industry",
+              "value": "={{$json.industry}}"
+            },
+            {
+              "name": "company.revenue",
+              "value": "={{$json.revenue}}"
+            },
+            {
+              "name": "company.accountManager",
+              "value": "={{$node[\"language_split\"].outputIndex === 0 ? 'Sophie' : 'Ryan'}}"
+            },
+            {
+              "name": "company.source",
+              "value": "Website Visit"
+            },
+            {
+              "name": "company.customFields.zoomInfoId",
+              "value": "={{$json.id}}"
+            },
+            {
+              "name": "company.customFields.pageViews",
+              "value": "={{$json.pageViews}}"
+            },
+            {
+              "name": "company.customFields.visitDuration",
+              "value": "={{$json.visitDuration}}"
+            },
+            {
+              "name": "company.customFields.pagesVisited",
+              "value": "={{$json.pagesVisited.join(', ')}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "create_company_membrain",
+      "name": "Créer Entreprise Membrain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2050, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.membrain.com/v1/companies",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$credentials.membrainApiKey}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.company}}"
+      }
+    },
+    {
+      "id": "create_contacts_loop",
+      "name": "Boucle Contacts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [2250, 300],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "id": "transform_contact_data",
+      "name": "Transformer Données Contact",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [2450, 300],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "contact.firstName",
+              "value": "={{$json.firstName}}"
+            },
+            {
+              "name": "contact.lastName",
+              "value": "={{$json.lastName}}"
+            },
+            {
+              "name": "contact.email",
+              "value": "={{$json.email}}"
+            },
+            {
+              "name": "contact.phone",
+              "value": "={{$json.phone}}"
+            },
+            {
+              "name": "contact.mobile",
+              "value": "={{$json.mobile}}"
+            },
+            {
+              "name": "contact.title",
+              "value": "={{$json.jobTitle}}"
+            },
+            {
+              "name": "contact.linkedInUrl",
+              "value": "={{$json.linkedInProfile}}"
+            },
+            {
+              "name": "contact.companyId",
+              "value": "={{$node[\"create_company_membrain\"].json.id}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "create_contact_membrain",
+      "name": "Créer Contact Membrain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2650, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.membrain.com/v1/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$credentials.membrainApiKey}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.contact}}"
+      }
+    },
+    {
+      "id": "create_prospect_project",
+      "name": "Créer Projet Prospection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.membrain.com/v1/opportunities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$credentials.membrainApiKey}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"{{$node[\"language_split\"].outputIndex === 0 ? 'Sophie' : 'Ryan'}} - Website Visit - {{$json.company.name}}\",\n  \"companyId\": \"{{$node[\"create_company_membrain\"].json.id}}\",\n  \"stage\": \"Prospection\",\n  \"accountManager\": \"{{$node[\"language_split\"].outputIndex === 0 ? 'Sophie' : 'Ryan'}}\",\n  \"source\": \"Website Activity\",\n  \"notes\": \"Visite site web détectée - {{$json.company.customFields.pageViews}} pages vues\\nDurée: {{$json.company.customFields.visitDuration}}\\nPages: {{$json.company.customFields.pagesVisited}}\"\n}"
+      }
+    },
+    {
+      "id": "update_existing_company",
+      "name": "MAJ Entreprise Existante",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1450, 400],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.membrain.com/v1/companies/{{$json.results[0].id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$credentials.membrainApiKey}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"customFields\": {\n    \"lastWebsiteVisit\": \"{{$now.toISO()}}\",\n    \"recentPageViews\": \"{{$json.pageViews}}\",\n    \"recentPagesVisited\": \"{{$json.pagesVisited.join(', ')}}\"\n  }\n}"
+      }
+    },
+    {
+      "id": "add_relance_note",
+      "name": "Ajouter Note Relance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1650, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.membrain.com/v1/companies/{{$json.results[0].id}}/notes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$credentials.membrainApiKey}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"RELANCE - Activité sur site web détectée\\nDate: {{$now.toISO()}}\\nPages vues: {{$json.pageViews}}\\nDurée: {{$json.visitDuration}}\\nPages visitées: {{$json.pagesVisited.join(', ')}}\\n\\nAncien client/prospect - vérifier historique pour action appropriée.\",\n  \"type\": \"activity\"\n}"
+      }
+    },
+    {
+      "id": "error_handler",
+      "name": "Gestion Erreurs",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "parameters": {}
+    },
+    {
+      "id": "send_error_notification",
+      "name": "Notification Erreur",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [450, 500],
+      "parameters": {
+        "fromEmail": "n8n@prima.com",
+        "toEmail": "sophie@prima.com",
+        "subject": "Erreur Workflow Prospection",
+        "text": "=Une erreur s'est produite dans le workflow de prospection:\\n\\nErreur: {{$json.error.message}}\\nNode: {{$json.error.node}}\\nHeure: {{$now.toISO()}}\\n\\nVeuillez vérifier le workflow."
+      }
+    },
+    {
+      "id": "success_summary",
+      "name": "Résumé Exécution",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [3050, 300],
+      "parameters": {
+        "fieldsToAggregate": [
+          {
+            "fieldToAggregate": "company.name",
+            "renameField": true,
+            "outputFieldName": "companiesProcessed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "send_daily_report",
+      "name": "Rapport Quotidien",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [3250, 300],
+      "parameters": {
+        "fromEmail": "n8n@prima.com",
+        "toEmail": "sophie@prima.com,ryan@prima.com",
+        "subject": "=Rapport Prospection - {{$today.toFormat('dd/MM/yyyy')}}",
+        "text": "=Bonjour,\\n\\nVoici le résumé de l'automatisation de prospection pour aujourd'hui:\\n\\nNombre total de visites traitées: {{$json.companiesProcessed.length}}\\nEntreprises ajoutées: {{$json.companiesProcessed.join(', ')}}\\n\\nLe détail complet est disponible dans Membrain.\\n\\nCordialement,\\nSystème d'automatisation PRIMA"
+      }
+    }
+  ],
+  "connections": {
+    "schedule_trigger": {
+      "main": [
+        [
+          {
+            "node": "zoominfo_auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zoominfo_auth": {
+      "main": [
+        [
+          {
+            "node": "zoominfo_website_visits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zoominfo_website_visits": {
+      "main": [
+        [
+          {
+            "node": "filter_criteria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter_criteria": {
+      "main": [
+        [
+          {
+            "node": "check_existing_membrain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_existing_membrain": {
+      "main": [
+        [
+          {
+            "node": "if_existing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if_existing": {
+      "main": [
+        [
+          {
+            "node": "update_existing_company",
+            "type": "main",
+            "index": 0
+          }
+        ], // TRUE : Entreprise existe -> MAJ
+        [
+          {
+            "node": "language_split",
+            "type": "main",
+            "index": 0
+          }
+        ] // FALSE : Entreprise n'existe pas -> Création
+      ]
+    },
+    "language_split": {
+      "main": [
+        [
+          {
+            "node": "enrich_zoominfo_contacts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "enrich_zoominfo_contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enrich_zoominfo_contacts": {
+      "main": [
+        [
+          {
+            "node": "transform_company_data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "transform_company_data": {
+      "main": [
+        [
+          {
+            "node": "create_company_membrain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_company_membrain": {
+      "main": [
+        [
+          {
+            "node": "create_contacts_loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_contacts_loop": {
+      "main": [
+        [
+          {
+            "node": "transform_contact_data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "create_prospect_project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "transform_contact_data": {
+      "main": [
+        [
+          {
+            "node": "create_contact_membrain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_contact_membrain": {
+      "main": [
+        [
+          {
+            "node": "create_contacts_loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_prospect_project": {
+      "main": [
+        [
+          {
+            "node": "success_summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_existing_company": {
+      "main": [
+        [
+          {
+            "node": "add_relance_note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add_relance_note": {
+      "main": [
+        [
+          {
+            "node": "success_summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "success_summary": {
+      "main": [
+        [
+          {
+            "node": "send_daily_report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "error_handler": {
+      "main": [
+        [
+          {
+            "node": "send_error_notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
