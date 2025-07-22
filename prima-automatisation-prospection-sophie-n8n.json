@@ -265,8 +265,8 @@
       "position": [1850, 300],
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "values": {
+          "string": [
             {
               "name": "company.name",
               "value": "={{$json.companyName}}"
@@ -276,16 +276,8 @@
               "value": "={{$json.companyWebsite}}"
             },
             {
-              "name": "company.size",
-              "value": "={{$json.employeeCount}}"
-            },
-            {
               "name": "company.industry",
               "value": "={{$json.industry}}"
-            },
-            {
-              "name": "company.revenue",
-              "value": "={{$json.revenue}}"
             },
             {
               "name": "company.accountManager",
@@ -300,16 +292,26 @@
               "value": "={{$json.id}}"
             },
             {
+              "name": "company.customFields.pagesVisited",
+              "value": "={{$json.pagesVisited.join(', ')}}"
+            }
+          ],
+          "number": [
+            {
+              "name": "company.size",
+              "value": "={{$json.employeeCount}}"
+            },
+            {
+              "name": "company.revenue",
+              "value": "={{$json.revenue}}"
+            },
+            {
               "name": "company.customFields.pageViews",
               "value": "={{$json.pageViews}}"
             },
             {
               "name": "company.customFields.visitDuration",
               "value": "={{$json.visitDuration}}"
-            },
-            {
-              "name": "company.customFields.pagesVisited",
-              "value": "={{$json.pagesVisited.join(', ')}}"
             }
           ]
         }
@@ -362,8 +364,8 @@
       "position": [2450, 300],
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "values": {
+          "string": [
             {
               "name": "contact.firstName",
               "value": "={{$json.firstName}}"
