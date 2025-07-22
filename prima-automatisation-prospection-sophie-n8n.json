@@ -631,14 +631,14 @@
             "type": "main",
             "index": 0
           }
-        ], // TRUE : Entreprise existe -> MAJ
+        ],
         [
           {
             "node": "language_split",
             "type": "main",
             "index": 0
           }
-        ] // FALSE : Entreprise n'existe pas -> Création
+        ]
       ]
     },
     "language_split": {
